@@ -4,8 +4,10 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
@@ -21,6 +23,8 @@ import java.util.Random;
 public class MainActivity extends AppCompatActivity {
 
     private ImageView m_ivDes;
+    private TextView m_tvProcessed;
+
 
     static {
         if(!OpenCVLoader.initDebug()){
@@ -34,12 +38,16 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         m_ivDes = (ImageView) findViewById(R.id.iv_des);
-
+        m_tvProcessed = (TextView) findViewById(R.id.tv_processed);
     }
 
 
     public void processImg(View v){
+        long start = System.currentTimeMillis();
         HoughCircle();
+//        CannyDetect();
+        long end = System.currentTimeMillis();
+        m_tvProcessed.setText(((end-start)/1000)+"秒");
     }
 
     /**
@@ -55,8 +63,7 @@ public class MainActivity extends AppCompatActivity {
         Imgproc.cvtColor(mtSrc,mtGray,Imgproc.COLOR_BGR2GRAY);
         Imgproc.Canny(mtGray,mtCannyEdge,10,100);
         bmDes = Bitmap.createBitmap(mtSrc.cols(),mtSrc.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(mtCannyEdge,bmDes);
-        m_ivDes.setImageBitmap(bmDes);
+        loadImg2Act(bmDes, mtCannyEdge);
     }
 
     /**
@@ -85,8 +92,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
-        Utils.matToBitmap(corners,bmDes);
-        m_ivDes.setImageBitmap(bmDes);
+        loadImg2Act(bmDes, corners);
     }
 
     /**
@@ -100,18 +106,30 @@ public class MainActivity extends AppCompatActivity {
      * 霍夫圆变换
      */
     private void HoughCircle(){
+        long start0 = System.currentTimeMillis();
         Bitmap bmSrc = BitmapFactory.decodeResource(getResources(),R.mipmap.jsp_src);
-        Mat mtSrc = new Mat(bmSrc.getHeight(),bmSrc.getWidth(), CvType.CV_8UC4);
         Bitmap bmDes;
+        Mat mtSrc = new Mat(bmSrc.getHeight(),bmSrc.getWidth(), CvType.CV_8UC4);
+        Utils.bitmapToMat(bmSrc,mtSrc);
         bmDes = Bitmap.createBitmap(mtSrc.cols(),mtSrc.rows(), Bitmap.Config.ARGB_8888);
         Mat mtGray = new Mat();
         Imgproc.cvtColor(mtSrc,mtGray,Imgproc.COLOR_BGR2GRAY);
+        long start1 = System.currentTimeMillis();
+
         Mat mtCannyEdges = new Mat();
         Mat mtCircles = new Mat();
         Mat mtHoughCircles = new Mat();
         Imgproc.Canny(mtGray,mtCannyEdges,10,100);
+        Log.e(this.getLocalClassName(),"图片Canny转换处理时间："+(start1 - start0));
+
+//        经测试发现，高斯变换耗时很长大概40秒左右
         Imgproc.HoughCircles(mtCannyEdges,mtCircles,Imgproc.CV_HOUGH_GRADIENT,1,mtGray.rows()/8);
+        long start2 = System.currentTimeMillis();
+        Log.e(this.getLocalClassName(),"图片HoughCircles转换处理时间："+(start2 - start1));
         mtHoughCircles.create(mtCannyEdges.rows(),mtCannyEdges.cols(),CvType.CV_8UC1);
+        long start3 = System.currentTimeMillis();
+        Log.e(this.getLocalClassName(),"图片HoughCircles创建处理时间："+(start3 - start2));
+
         for(int i=0;i<mtCircles.cols();i++){
             double[] parameters = mtCircles.get(0,i);
             double x,y;
@@ -123,7 +141,13 @@ public class MainActivity extends AppCompatActivity {
             Point center = new Point(x,y);
             Core.circle(mtHoughCircles,center,r,new Scalar(255,0,0),1);
         }
-        Utils.matToBitmap(mtHoughCircles,bmDes);
+        Log.e(this.getLocalClassName(),"for循环时间："+(System.currentTimeMillis() - start3));
+
+        loadImg2Act(bmDes, mtHoughCircles);
+    }
+
+    private void loadImg2Act(Bitmap bmDes, Mat mtGray) {
+        Utils.matToBitmap(mtGray,bmDes);
         m_ivDes.setImageBitmap(bmDes);
     }
 
